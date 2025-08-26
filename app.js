@@ -1,6 +1,6 @@
 // Application Configuration
 const CONFIG = {
-    socketUrl: 'https://chatrizpxtback.onrender.com',
+    socketUrl: 'https://chatrizpxtback.onrender.com',  // Your backend Render URL
     encryption: {
         algorithm: 'AES-GCM',
         keyDerivation: 'PBKDF2',
@@ -98,7 +98,6 @@ class CryptoUtils {
             false,
             ['deriveBits', 'deriveKey']
         );
-
         return crypto.subtle.deriveKey(
             {
                 name: 'PBKDF2',
@@ -117,13 +116,11 @@ class CryptoUtils {
         const encoder = new TextEncoder();
         const data = encoder.encode(text);
         const iv = await this.generateIV();
-
         const encrypted = await crypto.subtle.encrypt(
             { name: 'AES-GCM', iv: iv },
             key,
             data
         );
-
         return {
             data: Array.from(new Uint8Array(encrypted)),
             iv: Array.from(iv)
@@ -133,14 +130,12 @@ class CryptoUtils {
     static async decrypt(encryptedData, key) {
         const data = new Uint8Array(encryptedData.data);
         const iv = new Uint8Array(encryptedData.iv);
-
         try {
             const decrypted = await crypto.subtle.decrypt(
                 { name: 'AES-GCM', iv: iv },
                 key,
                 data
             );
-
             const decoder = new TextDecoder();
             return decoder.decode(decrypted);
         } catch (error) {
@@ -225,28 +220,20 @@ class UI {
         elements.toastMessage.textContent = message;
         elements.toast.className = `toast ${type}`;
         this.showElement(elements.toast);
-        
-        setTimeout(() => {
-            this.hideElement(elements.toast);
-        }, 3000);
+        setTimeout(() => { this.hideElement(elements.toast); }, 3000);
     }
 
     static updateConnectionStatus(status, message) {
         elements.statusText.textContent = message;
         elements.connectionStatus.className = `connection-status ${status}`;
-        
         if (status === 'connecting') {
             this.showElement(elements.loadingSpinner);
         } else {
             this.hideElement(elements.loadingSpinner);
         }
-        
         this.showElement(elements.connectionStatus);
-        
         if (status === 'connected') {
-            setTimeout(() => {
-                this.hideElement(elements.connectionStatus);
-            }, 2000);
+            setTimeout(() => { this.hideElement(elements.connectionStatus); }, 2000);
         }
     }
 
@@ -269,7 +256,13 @@ function initializeSocket() {
         return;
     }
 
-    socket = io(CONFIG.socketUrl);
+    // Updated Socket.IO initialization for production/Render compatibility
+    socket = io(CONFIG.socketUrl, {
+        transports: ['websocket', 'polling'],  // Prefer WebSocket, fallback to polling
+        secure: true,  // Enforce secure (HTTPS) connection
+        reconnection: true,  // Auto-reconnect on failure
+        reconnectionAttempts: CONFIG.ui.reconnectAttempts  // 5 attempts
+    });
 
     socket.on('connect', () => {
         console.log('Connected to server');
@@ -282,43 +275,39 @@ function initializeSocket() {
     });
 
     socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
+        console.error('Connection error details:', error);  // Improved logging for debugging
         UI.updateConnectionStatus('disconnected', 'Backend server not running');
     });
 
-    socket.on('room_created', (data) => {
+    socket.on('room-created', (data) => {
         handleRoomCreated(data);
     });
 
-    socket.on('room_joined', (data) => {
+    socket.on('joined-room', (data) => {
         handleRoomJoined(data);
     });
 
-    socket.on('join_error', (error) => {
+    socket.on('join-room-error', (error) => {
         UI.showToast(error.message, 'error');
         UI.hideElement(elements.usernameModal);
     });
 
-    socket.on('message', async (data) => {
+    socket.on('new-message', async (data) => {
         await handleNewMessage(data);
     });
 
-    socket.on('user_joined', (data) => {
+    socket.on('user-joined', (data) => {
         addSystemMessage(`${data.username} joined the room`);
-        updateParticipantsCount(data.participantCount);
+        updateParticipantsCount(data.participants.length);
     });
 
-    socket.on('user_left', (data) => {
+    socket.on('user-left', (data) => {
         addSystemMessage(`${data.username} left the room`);
-        updateParticipantsCount(data.participantCount);
+        updateParticipantsCount(data.participants.length);
     });
 
-    socket.on('typing', (data) => {
+    socket.on('user-typing', (data) => {
         handleTypingIndicator(data);
-    });
-
-    socket.on('stop_typing', (data) => {
-        handleStopTyping(data);
     });
 }
 
@@ -328,19 +317,15 @@ async function createRoom(roomName, password) {
         if (!socket || !socket.connected) {
             // Demo mode - simulate room creation
             const roomId = generateRoomId();
-            handleRoomCreated({
-                roomId: roomId,
-                roomName: roomName,
-                participantCount: 1
-            });
+            handleRoomCreated({ roomId: roomId, roomName: roomName, participants: [] });
             UI.showToast('Room created in demo mode', 'success');
             return;
         }
 
         const salt = await CryptoUtils.generateSalt();
         encryptionKey = await CryptoUtils.deriveKey(password, salt);
-        
-        socket.emit('create_room', {
+
+        socket.emit('create-room', {
             roomName,
             password,
             salt: Array.from(salt)
@@ -359,7 +344,7 @@ async function joinRoom(roomId, password) {
         }
 
         currentRoom = { id: roomId, password };
-        socket.emit('join_room', { roomId, password });
+        socket.emit('join-room', { roomId, password });
     } catch (error) {
         console.error('Error joining room:', error);
         UI.showToast('Failed to join room', 'error');
@@ -367,7 +352,7 @@ async function joinRoom(roomId, password) {
 }
 
 function generateRoomId() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 8; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -386,7 +371,6 @@ async function handleRoomJoined(data) {
     try {
         const salt = new Uint8Array(data.salt);
         encryptionKey = await CryptoUtils.deriveKey(currentRoom.password, salt);
-        
         currentRoom = { ...currentRoom, ...data };
         UI.hideElement(elements.usernameModal);
         showChatInterface();
@@ -401,10 +385,8 @@ function showChatInterface() {
     UI.hideElement(elements.landingPage);
     UI.hideElement(elements.roomCreatedModal);
     UI.showElement(elements.chatInterface);
-    
     elements.currentRoomName.textContent = currentRoom.roomName;
-    updateParticipantsCount(currentRoom.participantCount || 1);
-    
+    updateParticipantsCount(currentRoom.participants.length || 1);
     elements.messageInput.focus();
 }
 
@@ -427,11 +409,10 @@ async function sendMessage() {
         }
 
         const encryptedMessage = await CryptoUtils.encrypt(messageText, encryptionKey);
-        
-        socket.emit('message', {
+        socket.emit('send-message', {
             roomId: currentRoom.id,
-            message: encryptedMessage,
-            username: currentUser
+            encryptedMessage,
+            timestamp: new Date().toISOString()
         });
 
         elements.messageInput.value = '';
@@ -445,12 +426,11 @@ async function sendMessage() {
 async function handleNewMessage(data) {
     try {
         let messageContent;
-        
         if (data.type === 'system') {
             messageContent = data.message;
             addSystemMessage(messageContent);
         } else {
-            messageContent = await CryptoUtils.decrypt(data.message, encryptionKey);
+            messageContent = await CryptoUtils.decrypt(data.encryptedMessage, encryptionKey);
             addMessage(data.username, messageContent, data.timestamp, data.username === currentUser);
         }
     } catch (error) {
@@ -461,20 +441,17 @@ async function handleNewMessage(data) {
 function addMessage(username, content, timestamp, isOwn) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
-
     const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
     messageDiv.innerHTML = `
-        <div class="message-header">
-            <span class="message-username">${username}</span>
-            <span class="message-time">${time}</span>
+        <div class="message__header">
+            <span class="message__username">${escapeHtml(username)}</span>
+            <span class="message__time">${time}</span>
         </div>
-        <div class="message-content ${isEmojiOnly(content) ? 'emoji' : ''}">${escapeHtml(content)}</div>
+        <div class="message__content">${escapeHtml(content)}</div>
     `;
-
     elements.messagesList.appendChild(messageDiv);
     scrollToBottom();
-    
+
     // Limit displayed messages
     if (messages.length > CONFIG.ui.maxMessagesDisplay) {
         messages.shift();
@@ -482,15 +459,13 @@ function addMessage(username, content, timestamp, isOwn) {
             elements.messagesList.removeChild(elements.messagesList.firstChild);
         }
     }
-    
     messages.push({ username, content, timestamp, isOwn });
 }
 
 function addSystemMessage(content) {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message system';
-    messageDiv.innerHTML = `<div class="message-content">${escapeHtml(content)}</div>`;
-    
+    messageDiv.innerHTML = `<div class="message__content">${escapeHtml(content)}</div>`;
     elements.messagesList.appendChild(messageDiv);
     scrollToBottom();
 }
@@ -502,42 +477,27 @@ function scrollToBottom() {
 // Typing Indicators
 function startTyping() {
     if (!socket || !socket.connected) return;
-    
     if (typingTimeout) clearTimeout(typingTimeout);
-    
-    socket.emit('typing', {
-        roomId: currentRoom.id,
-        username: currentUser
-    });
-    
+    socket.emit('typing-start', { roomId: currentRoom.id });
     typingTimeout = setTimeout(stopTyping, CONFIG.ui.typingTimeout);
 }
 
 function stopTyping() {
     if (!socket || !socket.connected) return;
-    
     if (typingTimeout) {
         clearTimeout(typingTimeout);
         typingTimeout = null;
     }
-    
-    socket.emit('stop_typing', {
-        roomId: currentRoom.id,
-        username: currentUser
-    });
+    socket.emit('typing-stop', { roomId: currentRoom.id });
 }
 
 function handleTypingIndicator(data) {
-    if (data.username !== currentUser) {
-        elements.typingUsers.textContent = data.username;
-        UI.showElement(elements.typingIndicator);
-    }
+    elements.typingUsers.textContent = `${data.username} is typing...`;
+    UI.showElement(elements.typingIndicator);
 }
 
 function handleStopTyping(data) {
-    if (data.username !== currentUser) {
-        UI.hideElement(elements.typingIndicator);
-    }
+    UI.hideElement(elements.typingIndicator);
 }
 
 // Utility Functions
@@ -547,33 +507,25 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function isEmojiOnly(text) {
-    const emojiRegex = /^[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+$/u;
-    return emojiRegex.test(text.trim());
-}
-
 function updateParticipantsCount(count) {
-    elements.participantsCount.textContent = count;
+    elements.participantsCount.textContent = `${count} online`;
 }
 
 function leaveRoom() {
     if (socket && socket.connected && currentRoom) {
-        socket.emit('leave_room', { roomId: currentRoom.id });
+        socket.emit('leave-room', { roomId: currentRoom.id });
     }
-    
     // Clear sensitive data
     currentRoom = null;
     encryptionKey = null;
     currentUser = null;
     messages = [];
-    
     // Reset UI
     elements.messagesList.innerHTML = '';
     UI.hideElement(elements.chatInterface);
     UI.hideElement(elements.roomCreatedModal);
     UI.hideElement(elements.usernameModal);
     UI.showElement(elements.landingPage);
-    
     // Clear forms
     document.querySelectorAll('form').forEach(form => form.reset());
     document.querySelectorAll('.form-error').forEach(error => error.classList.remove('show'));
@@ -645,56 +597,52 @@ function initializeEventListeners() {
     // Create Room Form
     elements.createRoomForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
         const roomName = elements.roomName.value.trim();
         const password = elements.createPassword.value;
-        
+
         // Clear previous errors
         UI.hideError('room-name');
         UI.hideError('create-password');
-        
+
         // Validate inputs
         const roomNameError = Validator.validateRoomName(roomName);
         const passwordError = Validator.validatePassword(password);
-        
+
         if (roomNameError) {
             UI.showError('room-name', roomNameError);
             return;
         }
-        
         if (passwordError) {
             UI.showError('create-password', passwordError);
             return;
         }
-        
+
         await createRoom(roomName, password);
     });
 
     // Join Room Form
     elements.joinRoomForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
         const roomId = elements.roomId.value.trim();
         const password = elements.joinPassword.value;
-        
+
         // Clear previous errors
         UI.hideError('room-id');
         UI.hideError('join-password');
-        
+
         // Validate inputs
         const roomIdError = Validator.validateRoomId(roomId);
         const passwordError = Validator.validatePassword(password);
-        
+
         if (roomIdError) {
             UI.showError('room-id', roomIdError);
             return;
         }
-        
         if (passwordError) {
             UI.showError('join-password', passwordError);
             return;
         }
-        
+
         UI.showElement(elements.usernameModal);
         currentRoom = { id: roomId, password };
     });
@@ -702,32 +650,25 @@ function initializeEventListeners() {
     // Username Form
     elements.usernameForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
         const username = elements.username.value.trim();
-        
+
         // Clear previous errors
         UI.hideError('username');
-        
+
         // Validate username
         const usernameError = Validator.validateUsername(username);
-        
         if (usernameError) {
             UI.showError('username', usernameError);
             return;
         }
-        
+
         currentUser = username;
-        
         if (socket && socket.connected) {
-            socket.emit('join_room', {
-                roomId: currentRoom.id,
-                password: currentRoom.password,
-                username: username
-            });
+            socket.emit('join-room', { roomId: currentRoom.id, password: currentRoom.password, username: username });
         } else {
             // Demo mode - simulate entering chat
             currentRoom.roomName = 'Demo Room';
-            currentRoom.participantCount = 1;
+            currentRoom.participants = [username];
             UI.hideElement(elements.usernameModal);
             showChatInterface();
             addSystemMessage('Welcome to demo mode! Backend server is not running.');
@@ -793,7 +734,6 @@ function initializeEventListeners() {
 function handleURLParameters() {
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = urlParams.get('roomId');
-    
     if (roomId && Validator.validateRoomId(roomId) === null) {
         elements.roomId.value = roomId;
         elements.roomId.focus();
@@ -803,12 +743,10 @@ function handleURLParameters() {
 // Initialize Application
 function initialize() {
     console.log('Initializing SecureChat...');
-    
     initializeSocket();
     initializeEventListeners();
     initializeEmojiPicker();
     handleURLParameters();
-    
     console.log('SecureChat initialized successfully');
 }
 
@@ -825,6 +763,6 @@ document.addEventListener('visibilitychange', () => {
 // Handle page unload
 window.addEventListener('beforeunload', () => {
     if (socket && socket.connected && currentRoom) {
-        socket.emit('leave_room', { roomId: currentRoom.id });
+        socket.emit('leave-room', { roomId: currentRoom.id });
     }
 });
