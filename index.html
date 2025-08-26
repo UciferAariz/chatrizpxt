@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureChat - Private Encrypted Messaging</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Landing Page -->
+    <div id="landing-page" class="landing-page">
+        <div class="container">
+            <header class="landing-header">
+                <h1>🔐 SecureChat</h1>
+                <p>Private, encrypted chat rooms for secure conversations</p>
+            </header>
+            
+            <div class="landing-content">
+                <div class="room-actions">
+                    <!-- Create Room Section -->
+                    <div class="card room-card">
+                        <div class="card__body">
+                            <h3>Create New Room</h3>
+                            <form id="create-room-form" class="room-form">
+                                <div class="form-group">
+                                    <label for="room-name" class="form-label">Room Name</label>
+                                    <input type="text" id="room-name" class="form-control" placeholder="Enter room name" required>
+                                    <div class="form-error" id="room-name-error"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-password" class="form-label">Password</label>
+                                    <input type="password" id="create-password" class="form-control" placeholder="Enter password" required>
+                                    <div class="form-error" id="create-password-error"></div>
+                                </div>
+                                <button type="submit" class="btn btn--primary btn--full-width">Create Room</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Join Room Section -->
+                    <div class="card room-card">
+                        <div class="card__body">
+                            <h3>Join Existing Room</h3>
+                            <form id="join-room-form" class="room-form">
+                                <div class="form-group">
+                                    <label for="room-id" class="form-label">Room ID</label>
+                                    <input type="text" id="room-id" class="form-control" placeholder="Enter room ID" required>
+                                    <div class="form-error" id="room-id-error"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="join-password" class="form-label">Password</label>
+                                    <input type="password" id="join-password" class="form-control" placeholder="Enter password" required>
+                                    <div class="form-error" id="join-password-error"></div>
+                                </div>
+                                <button type="submit" class="btn btn--primary btn--full-width">Join Room</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Created Modal -->
+    <div id="room-created-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Room Created Successfully!</h3>
+            <div class="room-info">
+                <div class="room-detail">
+                    <label>Room ID:</label>
+                    <div class="copy-field">
+                        <input type="text" id="created-room-id" readonly class="form-control">
+                        <button class="btn btn--secondary" id="copy-room-id">Copy</button>
+                    </div>
+                </div>
+                <div class="room-detail">
+                    <label>Invite Link:</label>
+                    <div class="copy-field">
+                        <input type="text" id="invite-link" readonly class="form-control">
+                        <button class="btn btn--secondary" id="copy-invite-link">Copy</button>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn--primary btn--full-width" id="proceed-to-room">Enter Room</button>
+        </div>
+    </div>
+
+    <!-- Username Modal -->
+    <div id="username-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Enter Your Username</h3>
+            <form id="username-form">
+                <div class="form-group">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" id="username" class="form-control" placeholder="Enter username" required>
+                    <div class="form-error" id="username-error"></div>
+                </div>
+                <button type="submit" class="btn btn--primary btn--full-width">Join Chat</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Chat Interface -->
+    <div id="chat-interface" class="chat-interface hidden">
+        <!-- Chat Header -->
+        <div class="chat-header">
+            <div class="chat-info">
+                <h2 id="current-room-name">Room Name</h2>
+                <div class="participants-info">
+                    <span id="participants-count">0</span> participants online
+                </div>
+            </div>
+            <div class="chat-actions">
+                <button class="btn btn--secondary" id="invite-btn">📋 Invite</button>
+                <button class="btn btn--outline" id="leave-room">Leave Room</button>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div class="messages-container" id="messages-container">
+            <div class="messages-list" id="messages-list"></div>
+            <div class="typing-indicator hidden" id="typing-indicator">
+                <span id="typing-users"></span> is typing...
+            </div>
+        </div>
+
+        <!-- Message Input -->
+        <div class="message-input-container">
+            <div class="emoji-picker hidden" id="emoji-picker">
+                <div class="emoji-grid" id="emoji-grid"></div>
+            </div>
+            <div class="input-group">
+                <button class="btn btn--secondary emoji-btn" id="emoji-btn">😊</button>
+                <input type="text" id="message-input" class="form-control message-input" placeholder="Type a message..." maxlength="1000">
+                <button class="btn btn--primary" id="send-btn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div id="connection-status" class="connection-status hidden">
+        <div class="status-content">
+            <span id="status-text">Connecting...</span>
+            <div class="loading-spinner" id="loading-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hidden">
+        <span id="toast-message"></span>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
