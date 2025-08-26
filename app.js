@@ -1,6 +1,6 @@
 // Application Configuration
 const CONFIG = {
-    socketUrl: 'http://localhost:3001',
+    socketUrl: 'https://chatrizpxtback.onrender.com',
     encryption: {
         algorithm: 'AES-GCM',
         keyDerivation: 'PBKDF2',
